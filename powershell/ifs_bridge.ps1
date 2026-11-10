@@ -3,28 +3,32 @@ param(
   [Parameter(Mandatory=$true)][string]$OutputPath
 )
 $ErrorActionPreference = "Stop"
+
+function Test-IFSIdentifier([string]$name) {
+  if ([string]::IsNullOrEmpty($name)) { return $false }
+  for ($i = 0; $i -lt $name.Length; $i++) {
+    $ch = [int][char]$name[$i]
+    $letter = (($ch -ge 65 -and $ch -le 90) -or ($ch -ge 97 -and $ch -le 122))
+    $digit = ($ch -ge 48 -and $ch -le 57)
+    if ($i -eq 0) { if (-not $letter) { return $false } }
+    elseif (-not ($letter -or $digit -or $ch -eq 95)) { return $false }
+  }
+  return $true
+}
+
 try {
   $cfg = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-  # VIEW adini temizle ve karakterleri tek tek dogrula (PowerShell regex bagimliligini kaldir).
+  # VIEW adini temizle ve ASCII karakterleriyle dogrula.
   $view = ([string]$cfg.view).Trim().Trim([char]0xFEFF).Trim()
-  $validView = ($view.Length -gt 0)
-  for ($i = 0; $i -lt $view.Length; $i++) {
-    $ch = [int][char]$view[$i]
-    $isLetter = (($ch -ge 65 -and $ch -le 90) -or ($ch -ge 97 -and $ch -le 122))
-    $isDigit = ($ch -ge 48 -and $ch -le 57)
-    if ($i -eq 0) { if (-not $isLetter) { $validView = $false; break } }
-    elseif (-not ($isLetter -or $isDigit -or $ch -eq 95)) { $validView = $false; break }
-  }
-  if (-not $validView) {
-    $codes = ($view.ToCharArray() | ForEach-Object { [int][char]$_ }) -join ","
-    throw "Gecersiz VIEW degeri: [$view] (karakter kodlari: $codes)"
+  if (-not (Test-IFSIdentifier $view)) {
+    throw "Gecersiz VIEW degeri: [$view]"
   }
   if (!$cfg.columns -or $cfg.columns.Count -lt 1) {
     throw "Sorgulanacak gercek alan yok."
   }
   foreach ($fieldName in $cfg.columns) {
-    if ([string]$fieldName -notmatch '^[A-Za-z][A-Za-z0-9_]*$') {
+    if (-not (Test-IFSIdentifier ([string]$fieldName))) {
       throw "Gecersiz alan adi: $fieldName"
     }
   }
@@ -78,7 +82,7 @@ try {
   foreach ($filter in $cfg.filters) {
     $field = [string]$filter.name
     $value = [string]$filter.value
-    if ($field -notmatch '^[A-Za-z][A-Za-z0-9_]*$') {
+    if (-not (Test-IFSIdentifier $field)) {
       throw "Gecersiz filtre alani: $field"
     }
     if (!$value -or $value -eq "%") { continue }
