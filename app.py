@@ -355,11 +355,13 @@ class App:
         if not rows:
             messagebox.showinfo("Kopyalama", "Kopyalanacak sonuç bulunamadı.")
             return
-        keys = []
-        for _, _, row in rows:
-            for key in row:
-                if key not in keys:
-                    keys.append(key)
+        preferred = getattr(self, "visible_field_names", [])
+        keys = [key for key in preferred if any(key in row for _, _, row in rows)]
+        if not keys:
+            for _, _, row in rows:
+                for key in row:
+                    if key not in keys:
+                        keys.append(key)
         lines = ["Çekilme zamanı\tDeğişim\t" + "\t".join(keys)]
         for dt, kind, row in rows:
             vals = [str(row.get(k, "") if row.get(k) is not None else "") for k in keys]
