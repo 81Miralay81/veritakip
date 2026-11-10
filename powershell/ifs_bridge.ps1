@@ -65,8 +65,8 @@ try {
   $cred.SystemName = [string]$cfg.system_name
   $cred.Language = "tr-TR"
   $cred.ShowLoginDialog = $true
-  $cred.ForcedShow = $true
-  $cred.RememberPassword = $false
+  $cred.ForcedShow = $false
+  $cred.RememberPassword = $true
 
   $dialog = New-Object Ifs.Fnd.AccessProvider.Interactive.FndLoginDialog($conn)
   $login = $dialog.ShowDialog($cred, $true)
@@ -98,7 +98,12 @@ try {
     }
     else {
       $bindName = "P_VAL_$index"
-      $where += ('"' + $field + '" = :' + $bindName)
+      if ($value.Contains("%") -or $value.Contains("_")) {
+        $where += ('UPPER("' + $field + '") LIKE UPPER(:' + $bindName + ')')
+      }
+      else {
+        $where += ('"' + $field + '" = :' + $bindName)
+      }
       $attr = New-Object Ifs.Fnd.Data.FndAlphaAttribute($value)
       $binds.Add((New-Object Ifs.Fnd.AccessProvider.PLSQL.FndBindVariable($bindName, $attr)))
     }
