@@ -16,7 +16,10 @@ def db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(DB_PATH)
     c.execute("""CREATE TABLE IF NOT EXISTS sources(id INTEGER PRIMARY KEY,name TEXT,lu TEXT,view_name TEXT,copy_text TEXT,fields TEXT,key_fields TEXT,interval_minutes INTEGER DEFAULT 60,enabled INTEGER DEFAULT 1,last_run TEXT,last_status TEXT)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,source_id INTEGER,fetched_at TEXT,row_json TEXT,row_hash TEXT,change_type TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,source_id INTEGER,fetched_at TEXT,row_json TEXT,row_hash TEXT,change_type TEXT,row_key TEXT)""")
+    snapshot_columns = {row[1] for row in c.execute("PRAGMA table_info(snapshots)")}
+    if "row_key" not in snapshot_columns:
+        c.execute("ALTER TABLE snapshots ADD COLUMN row_key TEXT")
     c.commit()
     return c
 
@@ -218,15 +221,22 @@ class App:
             self.c.execute("UPDATE sources SET last_run=?,last_status=? WHERE id=?", (now, "0 kayıt; eşleşen sonuç yok", sid))
             self.c.commit()
             return "Sorgu tamamlandı; bu filtrelerle eşleşen kayıt bulunamadı."
+        key_row = self.c.execute("SELECT key_fields FROM sources WHERE id=?", (sid,)).fetchone()
+        key_fields = [x for x in (key_row[0] or "").split(",") if x] if key_row else []
         new = changed = 0
         for row in rows:
             encoded = json.dumps(row, ensure_ascii=False, sort_keys=True)
             digest = hashlib.sha256(encoded.encode()).hexdigest()
-            key = json.dumps(row, ensure_ascii=False, sort_keys=True)
-            old = self.c.execute("SELECT row_hash FROM snapshots WHERE source_id=? AND row_json=? ORDER BY id DESC LIMIT 1", (sid, key)).fetchone()
+            # Compare records by stable business key (e.g. CONTRACT + PART_NO),
+            # not by the entire row JSON; otherwise changed records look new.
+            if key_fields and all(k in row for k in key_fields):
+                row_key = json.dumps([row.get(k) for k in key_fields], ensure_ascii=False)
+            else:
+                row_key = encoded
+            old = self.c.execute("SELECT row_hash FROM snapshots WHERE source_id=? AND row_key=? ORDER BY id DESC LIMIT 1", (sid, row_key)).fetchone()
             kind = "NEW" if old is None else ("UNCHANGED" if old[0] == digest else "CHANGED")
             new += kind == "NEW"; changed += kind == "CHANGED"
-            self.c.execute("INSERT INTO snapshots(source_id,fetched_at,row_json,row_hash,change_type) VALUES(?,?,?,?,?)", (sid, now, encoded, digest, kind))
+            self.c.execute("INSERT INTO snapshots(source_id,fetched_at,row_json,row_hash,change_type,row_key) VALUES(?,?,?,?,?,?)", (sid, now, encoded, digest, kind, row_key))
         self.c.execute("UPDATE sources SET last_run=?,last_status=? WHERE id=?", (now, f"{len(rows)} kayıt; yeni {new}; değişen {changed}", sid))
         self.c.commit()
         return f"{len(rows)} kayıt alındı. Yeni: {new}, değişen: {changed}"
