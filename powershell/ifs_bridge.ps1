@@ -117,7 +117,9 @@ try {
   $cmd = New-Object Ifs.Fnd.AccessProvider.PLSQL.FndPLSQLSelectCommand($conn)
   $cmd.CommandText = $sql
   $cmd.MaxRows = $limit
-  $cmd.BindVariables = $binds
+  foreach ($bind in $binds) {
+    $cmd.BindVariables.Add($bind)
+  }
 
   $table = $cmd.ExecuteReader()
   $rows = @()
