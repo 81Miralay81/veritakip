@@ -276,7 +276,13 @@ class App:
     def fetch(self):
         if not self.sid: messagebox.showwarning("Kaynak", "Önce kaynağı kaydet."); return
         try:
-            self.status.config(text="IFS oturumu açılıyor..."); self.r.update_idletasks()
+            proceed = messagebox.askyesno("Sorgu öncesi kontrol",
+                f"Bu sorgu en fazla {MAX_ROWS:,} satır getirecek.\n\n"
+                "Güvenlik için 500 satırdan fazlası otomatik olarak alınmaz.\n\nDevam edilsin mi?")
+            if not proceed:
+                self.status.config(text="Sorgu kullanıcı tarafından iptal edildi.")
+                return
+            self.status.config(text="IFS sorgusu çalıştırılıyor..."); self.r.update_idletasks()
             msg = self.execute_sync(self.sid); self.status.config(text=msg); self.load_rows()
             messagebox.showinfo("Tamamlandı", msg)
         except Exception as e:
