@@ -1,0 +1,30 @@
+name: Build Miralay IFS Explorer
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Build Windows EXE
+        shell: pwsh
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name MiralayIFSExplorer --add-data "powershell/ifs_bridge.ps1;powershell" app.py
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miralay-IFS-Explorer-Windows-EXE
+          path: dist/MiralayIFSExplorer.exe
+          if-no-files-found: error
+          retention-days: 30
