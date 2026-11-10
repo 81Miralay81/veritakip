@@ -6,9 +6,17 @@ $ErrorActionPreference = "Stop"
 try {
   $cfg = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-  # VIEW adini JSON aktarimindaki BOM ve bosluklardan arindir.
+  # VIEW adini temizle ve karakterleri tek tek dogrula (PowerShell regex bagimliligini kaldir).
   $view = ([string]$cfg.view).Trim().Trim([char]0xFEFF).Trim()
-  if ($view -notmatch '^[A-Za-z][A-Za-z0-9_]*$') {
+  $validView = ($view.Length -gt 0)
+  for ($i = 0; $i -lt $view.Length; $i++) {
+    $ch = [int][char]$view[$i]
+    $isLetter = (($ch -ge 65 -and $ch -le 90) -or ($ch -ge 97 -and $ch -le 122))
+    $isDigit = ($ch -ge 48 -and $ch -le 57)
+    if ($i -eq 0) { if (-not $isLetter) { $validView = $false; break } }
+    elseif (-not ($isLetter -or $isDigit -or $ch -eq 95)) { $validView = $false; break }
+  }
+  if (-not $validView) {
     $codes = ($view.ToCharArray() | ForEach-Object { [int][char]$_ }) -join ","
     throw "Gecersiz VIEW degeri: [$view] (karakter kodlari: $codes)"
   }
