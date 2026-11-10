@@ -18,11 +18,10 @@ jobs:
           python-version: "3.12"
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
-      - name: Download Kalıp Takip branding
+      - name: Download Kalıp Takip application icon
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path assets | Out-Null
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/81Miralay81/kalip-takip/main/KalipTakip.App/Resources/logo.png" -OutFile "assets/logo.png"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/81Miralay81/kalip-takip/main/KalipTakip.App/Resources/uygulama.ico" -OutFile "assets/uygulama.ico"
       - name: Build Windows EXE
         shell: pwsh

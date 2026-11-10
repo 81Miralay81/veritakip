@@ -57,7 +57,7 @@ def parse_copy(raw):
 class App:
     def __init__(self, r):
         self.r, self.c, self.sid = r, db(), None
-        r.title(APP_NAME); r.geometry("1360x900"); r.minsize(1080, 740)
+        r.title(APP_NAME); r.geometry("1360x830"); r.minsize(1080, 700)
         r.configure(bg=COLORS["background"])
         try:
             r.iconbitmap(str(root_path() / "assets" / "uygulama.ico"))
@@ -89,12 +89,12 @@ class App:
         pan = ttk.Panedwindow(r, orient=tk.HORIZONTAL); pan.pack(fill=tk.BOTH, expand=True)
         left = ttk.Frame(pan, padding=10, style="Panel.TFrame"); right = ttk.Frame(pan, padding=16)
         pan.add(left, weight=1); pan.add(right, weight=4)
-        brand_panel = tk.Canvas(left, height=132, bg="#281678", highlightthickness=0, bd=0)
+        brand_panel = tk.Canvas(left, height=54, bg="#201354", highlightthickness=0, bd=0)
         brand_panel.pack(fill=tk.X, pady=(0, 12))
         self.banner_logo = None
         try:
             raw_logo = tk.PhotoImage(file=str(root_path() / "assets" / "logo.png"))
-            self.banner_logo = raw_logo.subsample(6, 6)
+            self.banner_logo = raw_logo.subsample(2, 2)
         except Exception:
             pass
         self.draw_brand_panel(brand_panel)
@@ -175,6 +175,7 @@ class App:
         tableframe.rowconfigure(0, weight=1); tableframe.columnconfigure(0, weight=1)
         self.result_rows = []
         self.displayed_indexes = []
+        r.after(150, lambda: pan.sashpos(0, 250))
         self.refresh(); r.protocol("WM_DELETE_WINDOW", self.close)
 
     def refresh(self):
@@ -184,27 +185,12 @@ class App:
         self.load_rows()
 
     def draw_brand_panel(self, canvas):
-        """Draw a compact header using Kalıp Takip's purple and green brand palette."""
-        width = max(canvas.winfo_width(), 220)
-        height = max(canvas.winfo_height(), 132)
+        """Fill the sidebar brand area with the white-wordmark Kalıp Takip banner."""
+        width = max(canvas.winfo_width(), 210)
+        height = max(canvas.winfo_height(), 54)
         canvas.delete("all")
-        left = (40, 22, 120)
-        right = (96, 38, 160)
-        for x in range(0, width, 4):
-            t = min(1.0, x / max(width - 1, 1))
-            rgb = tuple(round(a + (b - a) * t) for a, b in zip(left, right))
-            color = "#%02x%02x%02x" % rgb
-            canvas.create_rectangle(x, 0, x + 4, height, fill=color, outline=color)
-        canvas.create_oval(width - 80, -68, width + 38, 50, outline="#7851ba", width=1)
-        canvas.create_oval(width - 62, -50, width + 20, 32, outline="#7650b4", width=1)
-        canvas.create_text(15, 23, text="MIRALAY IFS", anchor="w", fill="#ffffff",
-                           font=("Segoe UI Semibold", 14))
-        canvas.create_text(15, 47, text="EXPLORER  ·  10.10 PROD", anchor="w", fill="#e1d8ff",
-                           font=("Segoe UI", 8))
         if self.banner_logo is not None:
-            canvas.create_image(width - 12, height - 30, image=self.banner_logo, anchor="e")
-        canvas.create_rectangle(0, height - 3, width // 2, height, fill="#7eb62d", outline="")
-        canvas.create_rectangle(width // 2, height - 3, width, height, fill="#06b6d4", outline="")
+            canvas.create_image(width // 2, height // 2, image=self.banner_logo, anchor="center")
 
     def select(self, _=None):
         ix = self.lst.curselection()
