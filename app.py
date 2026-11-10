@@ -51,11 +51,25 @@ def parse_copy(raw):
 class App:
     def __init__(self, r):
         self.r, self.c, self.sid = r, db(), None
-        r.title(APP_NAME); r.geometry("1120x760"); r.minsize(900, 600)
+        r.title(APP_NAME); r.geometry("1240x820"); r.minsize(980, 680)
+        r.configure(bg="#eef2f7")
+        style = ttk.Style()
+        try: style.theme_use("clam")
+        except tk.TclError: pass
+        style.configure("TFrame", background="#eef2f7")
+        style.configure("TLabel", background="#eef2f7", foreground="#263449", font=("Segoe UI", 9))
+        style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=(10, 7), background="#dbe4f0", foreground="#203047", borderwidth=1, relief="raised")
+        style.map("TButton", background=[("active", "#c5d4e8"), ("pressed", "#aebfd6")])
+        style.configure("Treeview", background="#ffffff", fieldbackground="#ffffff", foreground="#243247", rowheight=29, borderwidth=1, relief="solid", font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", background="#172b4d", foreground="#ffffff", font=("Segoe UI", 9, "bold"), padding=(8, 9), relief="raised", borderwidth=1)
+        style.map("Treeview.Heading", background=[("active", "#29466f")])
+        style.map("Treeview", background=[("selected", "#c7dcf5")], foreground=[("selected", "#14243a")])
         pan = ttk.Panedwindow(r, orient=tk.HORIZONTAL); pan.pack(fill=tk.BOTH, expand=True)
         left = ttk.Frame(pan, padding=10); right = ttk.Frame(pan, padding=12)
         pan.add(left, weight=1); pan.add(right, weight=4)
-        ttk.Label(left, text="MIRALAY IFS", font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=8)
+        brand = ttk.Label(left, text="MIRALAY IFS", font=("Segoe UI", 15, "bold"), foreground="#ffffff")
+        brand.pack(fill=tk.X, ipady=12, pady=(0, 12))
+        brand.configure(background="#172b4d", anchor="center")
         self.lst = tk.Listbox(left, exportselection=False); self.lst.pack(fill=tk.BOTH, expand=True)
         self.lst.bind("<<ListboxSelect>>", self.select)
         ttk.Button(left, text="+ Yeni veri kaynağı", command=self.new).pack(fill=tk.X, pady=5)
@@ -300,6 +314,9 @@ class App:
         display = ["date", "kind"] + [f"f{field_names.index(name)}" for name in self.visible_field_names]
         self.tree.configure(columns=columns, displaycolumns=display)
         self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=155, minwidth=155, stretch=False)
+        self.tree.tag_configure("NEW", background="#e2f5e9", foreground="#14532d")
+        self.tree.tag_configure("CHANGED", background="#fff1d6", foreground="#854d0e")
+        self.tree.tag_configure("UNCHANGED", background="#f1f5f9", foreground="#334155")
         self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=95, minwidth=95, stretch=False)
         for i, name in enumerate(field_names):
             col = f"f{i}"
@@ -307,7 +324,7 @@ class App:
             self.tree.column(col, width=180, minwidth=110, stretch=False)
         for dt, kind, row in records:
             values = [dt, kind] + [row.get(name, "") for name in field_names]
-            self.tree.insert("", tk.END, values=values)
+            self.tree.insert("", tk.END, values=values, tags=(kind if kind in ("NEW", "CHANGED", "UNCHANGED") else "UNCHANGED",))
 
     def choose_columns(self):
         if not self.sid or not getattr(self, "field_names", []):
