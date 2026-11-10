@@ -137,8 +137,6 @@ try {
     view = $view
     fetched_at = (Get-Date).ToString("o")
   } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
-
-  $conn.Dispose()
   exit 0
 }
 catch {
