@@ -15,7 +15,10 @@ def root_path():
 def db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(DB_PATH)
-    c.execute("""CREATE TABLE IF NOT EXISTS sources(id INTEGER PRIMARY KEY,name TEXT,lu TEXT,view_name TEXT,copy_text TEXT,fields TEXT,key_fields TEXT,interval_minutes INTEGER DEFAULT 60,enabled INTEGER DEFAULT 1,last_run TEXT,last_status TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS sources(id INTEGER PRIMARY KEY,name TEXT,lu TEXT,view_name TEXT,copy_text TEXT,fields TEXT,key_fields TEXT,interval_minutes INTEGER DEFAULT 60,enabled INTEGER DEFAULT 1,last_run TEXT,last_status TEXT,visible_columns TEXT)""")
+    source_columns = {row[1] for row in c.execute("PRAGMA table_info(sources)")}
+    if "visible_columns" not in source_columns:
+        c.execute("ALTER TABLE sources ADD COLUMN visible_columns TEXT")
     c.execute("""CREATE TABLE IF NOT EXISTS snapshots(id INTEGER PRIMARY KEY,source_id INTEGER,fetched_at TEXT,row_json TEXT,row_hash TEXT,change_type TEXT,row_key TEXT)""")
     snapshot_columns = {row[1] for row in c.execute("PRAGMA table_info(snapshots)")}
     if "row_key" not in snapshot_columns:
@@ -74,6 +77,7 @@ class App:
         self.status.pack(anchor="w", pady=8)
         resultbar = ttk.Frame(right); resultbar.pack(fill=tk.X, pady=(8, 3))
         ttk.Label(resultbar, text="Sorgu sonuçları").pack(side=tk.LEFT)
+        ttk.Button(resultbar, text="Sütunları seç", command=self.choose_columns).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Seçili satırları kopyala", command=self.copy_selected).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Tüm sonuçları kopyala", command=self.copy_all).pack(side=tk.RIGHT, padx=3)
         tableframe = ttk.Frame(right); tableframe.pack(fill=tk.BOTH, expand=True)
@@ -283,16 +287,64 @@ class App:
                 if key not in field_names:
                     field_names.append(key)
         columns = ["date", "kind"] + [f"f{i}" for i in range(len(field_names))]
-        self.tree.configure(columns=columns, displaycolumns=columns)
-        self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=145, stretch=False)
-        self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=90, stretch=False)
+        self.field_names = field_names
+        visible = None
+        if self.sid:
+            saved = self.c.execute("SELECT visible_columns FROM sources WHERE id=?", (self.sid,)).fetchone()
+            if saved and saved[0]:
+                try: visible = set(json.loads(saved[0]))
+                except Exception: visible = None
+        if visible is None:
+            visible = set(field_names)
+        self.visible_field_names = [name for name in field_names if name in visible]
+        display = ["date", "kind"] + [f"f{field_names.index(name)}" for name in self.visible_field_names]
+        self.tree.configure(columns=columns, displaycolumns=display)
+        self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=155, minwidth=155, stretch=False)
+        self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=95, minwidth=95, stretch=False)
         for i, name in enumerate(field_names):
             col = f"f{i}"
             self.tree.heading(col, text=name)
-            self.tree.column(col, width=170, minwidth=90, stretch=True)
+            self.tree.column(col, width=180, minwidth=110, stretch=False)
         for dt, kind, row in records:
             values = [dt, kind] + [row.get(name, "") for name in field_names]
             self.tree.insert("", tk.END, values=values)
+
+    def choose_columns(self):
+        if not self.sid or not getattr(self, "field_names", []):
+            messagebox.showinfo("Sütunlar", "Önce bir veri kaynağı seçip sorgu sonucu getir.")
+            return
+        win = tk.Toplevel(self.r); win.title("Gösterilecek sütunları seç")
+        win.geometry("430x560"); win.transient(self.r); win.grab_set()
+        ttk.Label(win, text="Listede görmek istediğin sütunları işaretle:").pack(anchor="w", padx=12, pady=10)
+        tools = ttk.Frame(win); tools.pack(fill=tk.X, padx=10)
+        body = ttk.Frame(win); body.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        canvas = tk.Canvas(body, highlightthickness=0)
+        bar = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); bar.pack(side=tk.RIGHT, fill=tk.Y)
+        current = set(self.visible_field_names)
+        states = {}
+        for name in self.field_names:
+            v = tk.BooleanVar(value=name in current)
+            states[name] = v
+            ttk.Checkbutton(inner, text=name, variable=v).pack(anchor="w", pady=2)
+        def set_all(value):
+            for v in states.values(): v.set(value)
+        ttk.Button(tools, text="Tümünü seç", command=lambda: set_all(True)).pack(side=tk.LEFT, padx=3)
+        ttk.Button(tools, text="Tümünü kaldır", command=lambda: set_all(False)).pack(side=tk.LEFT, padx=3)
+        def save():
+            chosen = [name for name, v in states.items() if v.get()]
+            self.c.execute("UPDATE sources SET visible_columns=? WHERE id=?",
+                           (json.dumps(chosen, ensure_ascii=False), self.sid))
+            self.c.commit()
+            self.load_rows()
+            win.destroy()
+        bottom = ttk.Frame(win, padding=10); bottom.pack(fill=tk.X)
+        ttk.Button(bottom, text="Uygula", command=save).pack(side=tk.RIGHT, padx=4)
+        ttk.Button(bottom, text="İptal", command=win.destroy).pack(side=tk.RIGHT)
 
     def _copy_rows(self, selected_only=False):
         if selected_only:
