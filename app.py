@@ -1,4 +1,4 @@
-import argparse, hashlib, json, os, re, sqlite3, subprocess, sys, tempfile, tkinter as tk
+import argparse, getpass, hashlib, json, os, re, sqlite3, subprocess, sys, tempfile, tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +8,12 @@ DB_PATH = Path(os.getenv("LOCALAPPDATA", Path.home())) / "MiralayIFSExplorer" / 
 IFS_URL = "https://ifs10app2.teknorot.com:48080"
 SYSTEM_NAME = "TEKNOROT IFS10.10 PROD"
 MAX_ROWS = 500
+COLORS = {
+    "background": "#0b0d1c", "panel": "#151931", "panel_light": "#21274a",
+    "border": "#343a66", "input": "#1e2344", "text": "#eef1fc",
+    "muted": "#9aa5ca", "purple": "#6026a0", "blue": "#3b82f6",
+    "cyan": "#06b6d4", "green": "#22c55e", "danger": "#ef4444",
+}
 
 def root_path():
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -51,60 +57,100 @@ def parse_copy(raw):
 class App:
     def __init__(self, r):
         self.r, self.c, self.sid = r, db(), None
-        r.title(APP_NAME); r.geometry("1240x820"); r.minsize(980, 680)
-        r.configure(bg="#eef2f7")
+        r.title(APP_NAME); r.geometry("1360x900"); r.minsize(1080, 740)
+        r.configure(bg=COLORS["background"])
         try:
             r.iconbitmap(str(root_path() / "assets" / "uygulama.ico"))
-        except Exception:
-            pass
-        self.banner_logo = None
-        try:
-            self.banner_logo = tk.PhotoImage(file=str(root_path() / "assets" / "logo.png"))
         except Exception:
             pass
         style = ttk.Style()
         try: style.theme_use("clam")
         except tk.TclError: pass
-        style.configure("TFrame", background="#eef2f7")
-        style.configure("TLabel", background="#eef2f7", foreground="#263449", font=("Segoe UI", 9))
-        style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=(10, 7), background="#dbe4f0", foreground="#203047", borderwidth=1, relief="raised")
-        style.map("TButton", background=[("active", "#c5d4e8"), ("pressed", "#aebfd6")])
-        style.configure("Treeview", background="#ffffff", fieldbackground="#ffffff", foreground="#243247", rowheight=29, borderwidth=1, relief="solid", font=("Segoe UI", 9))
-        style.configure("Treeview.Heading", background="#172b4d", foreground="#ffffff", font=("Segoe UI", 9, "bold"), padding=(8, 9), relief="raised", borderwidth=1)
-        style.map("Treeview.Heading", background=[("active", "#29466f")])
-        style.map("Treeview", background=[("selected", "#c7dcf5")], foreground=[("selected", "#14243a")])
+        style.configure("TFrame", background=COLORS["background"])
+        style.configure("Panel.TFrame", background=COLORS["panel"])
+        style.configure("Inset.TFrame", background=COLORS["panel_light"])
+        style.configure("TLabel", background=COLORS["background"], foreground=COLORS["text"], font=("Segoe UI", 9))
+        style.configure("Muted.TLabel", background=COLORS["background"], foreground=COLORS["muted"], font=("Segoe UI", 9))
+        style.configure("Panel.TLabel", background=COLORS["panel"], foreground=COLORS["text"], font=("Segoe UI", 9))
+        style.configure("PanelMuted.TLabel", background=COLORS["panel"], foreground=COLORS["muted"], font=("Segoe UI", 9))
+        style.configure("Title.TLabel", background=COLORS["background"], foreground=COLORS["text"], font=("Segoe UI Semibold", 17))
+        style.configure("Section.TLabel", background=COLORS["panel"], foreground=COLORS["text"], font=("Segoe UI Semibold", 11))
+        style.configure("TButton", font=("Segoe UI Semibold", 9), padding=(11, 8), background=COLORS["panel_light"], foreground=COLORS["text"], borderwidth=0, relief="flat")
+        style.map("TButton", background=[("disabled", "#222642"), ("pressed", "#343a66"), ("active", "#343a66")], foreground=[("disabled", "#737d9f")])
+        for name, color in (("Primary", COLORS["blue"]), ("Accent", COLORS["purple"]), ("Success", "#149c68"), ("Danger", "#b93658"), ("Cyan", "#089bb8")):
+            style.configure(f"{name}.TButton", background=color, foreground="#ffffff", font=("Segoe UI Semibold", 9), padding=(12, 8), borderwidth=0, relief="flat")
+            style.map(f"{name}.TButton", background=[("disabled", "#343a55"), ("pressed", "#343a66"), ("active", COLORS["purple"] if name == "Primary" else color)])
+        style.configure("TEntry", fieldbackground=COLORS["input"], foreground=COLORS["text"], insertcolor=COLORS["text"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], padding=7)
+        style.configure("Treeview", background=COLORS["panel"], fieldbackground=COLORS["panel"], foreground=COLORS["text"], rowheight=31, borderwidth=0, font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", background="#30216f", foreground="#ffffff", font=("Segoe UI Semibold", 9), padding=(9, 10), relief="flat", borderwidth=0)
+        style.map("Treeview.Heading", background=[("active", "#4d2b95")])
+        style.map("Treeview", background=[("selected", "#49328d")], foreground=[("selected", "#ffffff")])
+        style.configure("TScrollbar", background=COLORS["panel_light"], troughcolor=COLORS["panel"], bordercolor=COLORS["panel"], arrowcolor=COLORS["muted"])
         pan = ttk.Panedwindow(r, orient=tk.HORIZONTAL); pan.pack(fill=tk.BOTH, expand=True)
-        left = ttk.Frame(pan, padding=10); right = ttk.Frame(pan, padding=12)
+        left = ttk.Frame(pan, padding=10, style="Panel.TFrame"); right = ttk.Frame(pan, padding=16)
         pan.add(left, weight=1); pan.add(right, weight=4)
-        brand_panel = tk.Frame(left, bg="#172b4d", height=112, highlightthickness=0)
+        brand_panel = tk.Canvas(left, height=132, bg="#281678", highlightthickness=0, bd=0)
         brand_panel.pack(fill=tk.X, pady=(0, 12))
-        brand_panel.pack_propagate(False)
-        if self.banner_logo is not None:
-            logo_label = tk.Label(brand_panel, image=self.banner_logo, bg="#172b4d", bd=0)
-            logo_label.pack(side=tk.TOP, pady=(8, 2))
-        tk.Label(brand_panel, text="MIRALAY IFS", font=("Segoe UI", 12, "bold"),
-                 fg="#ffffff", bg="#172b4d").pack(side=tk.TOP, pady=(0, 6))
-        self.lst = tk.Listbox(left, exportselection=False); self.lst.pack(fill=tk.BOTH, expand=True)
+        self.banner_logo = None
+        try:
+            raw_logo = tk.PhotoImage(file=str(root_path() / "assets" / "logo.png"))
+            self.banner_logo = raw_logo.subsample(6, 6)
+        except Exception:
+            pass
+        self.draw_brand_panel(brand_panel)
+        brand_panel.bind("<Configure>", lambda event: self.draw_brand_panel(brand_panel))
+        source_label = ttk.Label(left, text="VERİ KAYNAKLARI", style="PanelMuted.TLabel", font=("Segoe UI Semibold", 8))
+        source_label.pack(anchor="w", padx=3, pady=(0, 5))
+        self.lst = tk.Listbox(left, exportselection=False, bg=COLORS["panel"], fg=COLORS["text"],
+                              selectbackground="#4d2b95", selectforeground="#ffffff", relief="flat",
+                              highlightthickness=1, highlightbackground=COLORS["border"],
+                              highlightcolor=COLORS["blue"], activestyle="none", font=("Segoe UI", 10),
+                              borderwidth=0)
+        self.lst.pack(fill=tk.BOTH, expand=True)
         self.lst.bind("<<ListboxSelect>>", self.select)
-        ttk.Button(left, text="+ Yeni veri kaynağı", command=self.new).pack(fill=tk.X, pady=5)
-        ttk.Button(left, text="Kaynağı sil", command=self.delete).pack(fill=tk.X)
-        ttk.Label(right, text="Veri kaynağı", font=("Segoe UI", 16, "bold")).pack(anchor="w")
-        f = ttk.Frame(right); f.pack(fill=tk.X, pady=8)
-        ttk.Label(f, text="Kaynak adı").grid(row=0, column=0)
-        self.name = ttk.Entry(f, width=35); self.name.grid(row=0, column=1, padx=8, sticky="ew")
-        ttk.Label(f, text="Aralık (dakika)").grid(row=0, column=2)
-        self.interval = ttk.Entry(f, width=8); self.interval.insert(0, "60"); self.interval.grid(row=0, column=3, padx=8)
+        ttk.Button(left, text="＋  Yeni veri kaynağı", command=self.new, style="Accent.TButton").pack(fill=tk.X, pady=(8, 5))
+        ttk.Button(left, text="Kaynağı sil", command=self.delete, style="Danger.TButton").pack(fill=tk.X)
+        heading = ttk.Frame(right)
+        heading.pack(fill=tk.X, pady=(0, 10))
+        title_stack = ttk.Frame(heading)
+        title_stack.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(title_stack, text="Veri kaynağı", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(title_stack, text="IFS Applications 10.10  •  Salt okunur bağlantı", style="Muted.TLabel").pack(anchor="w", pady=(2, 0))
+        tk.Label(heading, text=f"Kullanıcı: {getpass.getuser()}", bg=COLORS["background"],
+                 fg=COLORS["muted"], font=("Segoe UI", 9)).pack(side=tk.RIGHT, padx=(8, 14), anchor="n", pady=7)
+        tk.Label(heading, text="●  PROD", bg="#183c32", fg="#9bf0be", font=("Segoe UI Semibold", 9), padx=12, pady=6).pack(side=tk.RIGHT, anchor="n", pady=5)
+        source_card = ttk.Frame(right, padding=12, style="Panel.TFrame")
+        source_card.pack(fill=tk.X, pady=(0, 9))
+        ttk.Label(source_card, text="KAYNAK AYARLARI", style="PanelMuted.TLabel", font=("Segoe UI Semibold", 8)).pack(anchor="w", pady=(0, 8))
+        f = ttk.Frame(source_card, style="Panel.TFrame"); f.pack(fill=tk.X)
+        ttk.Label(f, text="Kaynak adı", style="Panel.TLabel").grid(row=0, column=0)
+        self.name = ttk.Entry(f, width=35); self.name.grid(row=0, column=1, padx=(8, 22), sticky="ew")
+        ttk.Label(f, text="Çekme aralığı (dakika)", style="Panel.TLabel").grid(row=0, column=2)
+        self.interval = ttk.Entry(f, width=9); self.interval.insert(0, "60"); self.interval.grid(row=0, column=3, padx=(8, 0))
         f.columnconfigure(1, weight=1)
-        ttk.Label(right, text="IFS ekranından kopyaladığın !IFS.COPYOBJECT bloğunu yapıştır:").pack(anchor="w")
-        self.raw = tk.Text(right, height=13, wrap=tk.NONE); self.raw.pack(fill=tk.X, pady=6)
-        b = ttk.Frame(right); b.pack(fill=tk.X, pady=5)
-        ttk.Button(b, text="Alanları düzenle / Kaydet", command=self.save).pack(side=tk.LEFT, padx=3)
-        ttk.Button(b, text="Şimdi Çek", command=self.fetch).pack(side=tk.LEFT, padx=3)
-        ttk.Button(b, text="Zamanlamayı Kur", command=self.schedule).pack(side=tk.LEFT, padx=3)
-        self.status = ttk.Label(right, text="COPYOBJECT bloğunu yapıştırıp Alanları düzenle / Kaydet'e bas.")
-        self.status.pack(anchor="w", pady=8)
-        resultbar = ttk.Frame(right); resultbar.pack(fill=tk.X, pady=(8, 3))
-        ttk.Label(resultbar, text="Sorgu sonuçları").pack(side=tk.LEFT)
+        query_card = ttk.Frame(right, padding=12, style="Panel.TFrame")
+        query_card.pack(fill=tk.X, pady=(0, 9))
+        query_head = ttk.Frame(query_card, style="Panel.TFrame")
+        query_head.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(query_head, text="IFS SORGUSU", style="Panel.TLabel", font=("Segoe UI Semibold", 10)).pack(side=tk.LEFT)
+        ttk.Label(query_head, text="IFS ekranından kopyaladığın !IFS.COPYOBJECT bloğunu yapıştır", style="PanelMuted.TLabel").pack(side=tk.LEFT, padx=12)
+        text_frame = tk.Frame(query_card, bg=COLORS["input"], highlightthickness=1, highlightbackground=COLORS["border"])
+        text_frame.pack(fill=tk.X)
+        self.raw = tk.Text(text_frame, height=5, wrap=tk.NONE, bg=COLORS["input"], fg=COLORS["text"],
+                           insertbackground=COLORS["text"], selectbackground="#4d2b95", relief="flat",
+                           borderwidth=0, font=("Consolas", 9), padx=8, pady=7)
+        raw_scroll = ttk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=self.raw.xview)
+        self.raw.configure(xscrollcommand=raw_scroll.set)
+        self.raw.pack(fill=tk.X)
+        raw_scroll.pack(fill=tk.X)
+        b = ttk.Frame(right); b.pack(fill=tk.X, pady=(0, 4))
+        ttk.Button(b, text="Alanları düzenle / Kaydet", command=self.save, style="Primary.TButton").pack(side=tk.LEFT, padx=(0, 7))
+        ttk.Button(b, text="Şimdi Çek", command=self.fetch, style="Success.TButton").pack(side=tk.LEFT, padx=7)
+        ttk.Button(b, text="Zamanlamayı Kur", command=self.schedule, style="Accent.TButton").pack(side=tk.LEFT, padx=7)
+        self.status = ttk.Label(right, text="COPYOBJECT bloğunu yapıştırıp alanları kaydedin.", style="Muted.TLabel")
+        self.status.pack(anchor="w", pady=(1, 4))
+        resultbar = ttk.Frame(right); resultbar.pack(fill=tk.X, pady=(6, 4))
+        ttk.Label(resultbar, text="Sorgu sonuçları", style="Section.TLabel").pack(side=tk.LEFT)
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self.apply_search())
         ttk.Label(resultbar, text="Ara").pack(side=tk.LEFT, padx=(14, 4))
@@ -116,7 +162,8 @@ class App:
         ttk.Button(resultbar, text="Sütunları seç", command=self.choose_columns).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Seçili satırları kopyala", command=self.copy_selected).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Tüm sonuçları kopyala", command=self.copy_all).pack(side=tk.RIGHT, padx=3)
-        tableframe = ttk.Frame(right); tableframe.pack(fill=tk.BOTH, expand=True)
+        tableframe = tk.Frame(right, bg=COLORS["panel"], highlightthickness=1, highlightbackground=COLORS["border"])
+        tableframe.pack(fill=tk.BOTH, expand=True)
         self.tree = ttk.Treeview(tableframe, columns=("date", "kind"), show="headings", selectmode="extended")
         self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=145, stretch=False)
         self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=90, stretch=False)
@@ -135,6 +182,29 @@ class App:
         for name, in self.c.execute("SELECT name FROM sources ORDER BY id"):
             self.lst.insert(tk.END, name)
         self.load_rows()
+
+    def draw_brand_panel(self, canvas):
+        """Draw a compact header using Kalıp Takip's purple and green brand palette."""
+        width = max(canvas.winfo_width(), 220)
+        height = max(canvas.winfo_height(), 132)
+        canvas.delete("all")
+        left = (40, 22, 120)
+        right = (96, 38, 160)
+        for x in range(0, width, 4):
+            t = min(1.0, x / max(width - 1, 1))
+            rgb = tuple(round(a + (b - a) * t) for a, b in zip(left, right))
+            color = "#%02x%02x%02x" % rgb
+            canvas.create_rectangle(x, 0, x + 4, height, fill=color, outline=color)
+        canvas.create_oval(width - 80, -68, width + 38, 50, outline="#7851ba", width=1)
+        canvas.create_oval(width - 62, -50, width + 20, 32, outline="#7650b4", width=1)
+        canvas.create_text(15, 23, text="MIRALAY IFS", anchor="w", fill="#ffffff",
+                           font=("Segoe UI Semibold", 14))
+        canvas.create_text(15, 47, text="EXPLORER  ·  10.10 PROD", anchor="w", fill="#e1d8ff",
+                           font=("Segoe UI", 8))
+        if self.banner_logo is not None:
+            canvas.create_image(width - 12, height - 30, image=self.banner_logo, anchor="e")
+        canvas.create_rectangle(0, height - 3, width // 2, height, fill="#7eb62d", outline="")
+        canvas.create_rectangle(width // 2, height - 3, width, height, fill="#06b6d4", outline="")
 
     def select(self, _=None):
         ix = self.lst.curselection()
@@ -343,9 +413,9 @@ class App:
         display = ["date", "kind"] + [f"f{field_names.index(name)}" for name in self.visible_field_names]
         self.tree.configure(columns=columns, displaycolumns=display)
         self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=155, minwidth=155, stretch=False)
-        self.tree.tag_configure("NEW", background="#e2f5e9", foreground="#14532d")
-        self.tree.tag_configure("CHANGED", background="#fff1d6", foreground="#854d0e")
-        self.tree.tag_configure("UNCHANGED", background="#f1f5f9", foreground="#334155")
+        self.tree.tag_configure("NEW", background="#17372d", foreground="#b8f2cf")
+        self.tree.tag_configure("CHANGED", background="#3b2d1b", foreground="#ffe0a6")
+        self.tree.tag_configure("UNCHANGED", background="#1b203e", foreground="#cbd3ef")
         self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=95, minwidth=95, stretch=False)
         for i, name in enumerate(field_names):
             col = f"f{i}"
