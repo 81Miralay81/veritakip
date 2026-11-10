@@ -214,7 +214,10 @@ class App:
                 raise RuntimeError((p.stderr or p.stdout or "IFS bağlantı hatası")[-3000:])
             result = json.loads(out.read_text(encoding="utf-8-sig"))
         rows = result.get("rows", []); now = datetime.now().isoformat(timespec="seconds")
-        if not rows: raise RuntimeError("Sorgu kayıt döndürmedi. Filtre değerlerini ve alan adlarını kontrol et.")
+        if not rows:
+            self.c.execute("UPDATE sources SET last_run=?,last_status=? WHERE id=?", (now, "0 kayıt; eşleşen sonuç yok", sid))
+            self.c.commit()
+            return "Sorgu tamamlandı; bu filtrelerle eşleşen kayıt bulunamadı."
         new = changed = 0
         for row in rows:
             encoded = json.dumps(row, ensure_ascii=False, sort_keys=True)
