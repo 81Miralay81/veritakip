@@ -105,6 +105,14 @@ class App:
         self.status.pack(anchor="w", pady=8)
         resultbar = ttk.Frame(right); resultbar.pack(fill=tk.X, pady=(8, 3))
         ttk.Label(resultbar, text="Sorgu sonuçları").pack(side=tk.LEFT)
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *_: self.apply_search())
+        ttk.Label(resultbar, text="Ara").pack(side=tk.LEFT, padx=(14, 4))
+        search_entry = ttk.Entry(resultbar, textvariable=self.search_var, width=24)
+        search_entry.pack(side=tk.LEFT)
+        ttk.Button(resultbar, text="Temizle", command=lambda: self.search_var.set("")).pack(side=tk.LEFT, padx=4)
+        self.result_count = ttk.Label(resultbar, text="0 kayıt")
+        self.result_count.pack(side=tk.LEFT, padx=8)
         ttk.Button(resultbar, text="Sütunları seç", command=self.choose_columns).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Seçili satırları kopyala", command=self.copy_selected).pack(side=tk.RIGHT, padx=3)
         ttk.Button(resultbar, text="Tüm sonuçları kopyala", command=self.copy_all).pack(side=tk.RIGHT, padx=3)
@@ -119,6 +127,7 @@ class App:
         xbar.grid(row=1, column=0, sticky="ew")
         tableframe.rowconfigure(0, weight=1); tableframe.columnconfigure(0, weight=1)
         self.result_rows = []
+        self.displayed_indexes = []
         self.refresh(); r.protocol("WM_DELETE_WINDOW", self.close)
 
     def refresh(self):
@@ -306,6 +315,7 @@ class App:
     def load_rows(self):
         self.tree.delete(*self.tree.get_children())
         self.result_rows = []
+        self.displayed_indexes = []
         records = []
         if self.sid:
             for dt, kind, data in self.c.execute("SELECT fetched_at,change_type,row_json FROM snapshots WHERE source_id=? ORDER BY id DESC LIMIT 500", (self.sid,)):
@@ -314,7 +324,6 @@ class App:
                 except Exception:
                     row = {"KAYIT": data}
                 records.append((dt, kind, row))
-                self.result_rows.append((dt, kind, row))
         field_names = []
         for _, _, row in records:
             for key in row:
@@ -343,8 +352,34 @@ class App:
             self.tree.heading(col, text=name)
             self.tree.column(col, width=180, minwidth=110, stretch=False)
         for dt, kind, row in records:
-            values = [dt, kind] + [row.get(name, "") for name in field_names]
-            self.tree.insert("", tk.END, values=values, tags=(kind if kind in ("NEW", "CHANGED", "UNCHANGED") else "UNCHANGED",))
+            self.result_rows.append((dt, kind, row))
+        self.apply_search()
+
+    def apply_search(self):
+        """Filter loaded snapshots in the UI without issuing another IFS query."""
+        if not hasattr(self, "tree"):
+            return
+        query = self.search_var.get().strip().casefold() if hasattr(self, "search_var") else ""
+        self.tree.delete(*self.tree.get_children())
+        self.displayed_indexes = []
+        for index, (dt, kind, row) in enumerate(self.result_rows):
+            if not self.row_matches_search(dt, kind, row, query):
+                continue
+            values = [dt, kind] + [row.get(name, "") for name in getattr(self, "field_names", [])]
+            self.tree.insert("", tk.END, iid=f"row-{index}", values=values,
+                             tags=(kind if kind in ("NEW", "CHANGED", "UNCHANGED") else "UNCHANGED",))
+            self.displayed_indexes.append(index)
+        if hasattr(self, "result_count"):
+            total = len(self.result_rows)
+            shown = len(self.displayed_indexes)
+            self.result_count.config(text=f"{shown} / {total} kayıt" if query else f"{total} kayıt")
+
+    @staticmethod
+    def row_matches_search(dt, kind, row, query):
+        if not query:
+            return True
+        values = [dt, kind] + [str(value or "") for value in row.values()]
+        return any(query in value.casefold() for value in values)
 
     def choose_columns(self):
         if not self.sid or not getattr(self, "field_names", []):
@@ -385,7 +420,7 @@ class App:
 
     def _copy_rows(self, selected_only=False):
         if selected_only:
-            indexes = [self.tree.index(item) for item in self.tree.selection()]
+            indexes = [int(item[4:]) for item in self.tree.selection() if item.startswith("row-")]
             rows = [self.result_rows[i] for i in indexes if i < len(self.result_rows)]
         else:
             rows = self.result_rows
