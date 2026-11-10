@@ -53,6 +53,15 @@ class App:
         self.r, self.c, self.sid = r, db(), None
         r.title(APP_NAME); r.geometry("1240x820"); r.minsize(980, 680)
         r.configure(bg="#eef2f7")
+        try:
+            r.iconbitmap(str(root_path() / "assets" / "uygulama.ico"))
+        except Exception:
+            pass
+        self.banner_logo = None
+        try:
+            self.banner_logo = tk.PhotoImage(file=str(root_path() / "assets" / "logo.png"))
+        except Exception:
+            pass
         style = ttk.Style()
         try: style.theme_use("clam")
         except tk.TclError: pass
@@ -67,9 +76,14 @@ class App:
         pan = ttk.Panedwindow(r, orient=tk.HORIZONTAL); pan.pack(fill=tk.BOTH, expand=True)
         left = ttk.Frame(pan, padding=10); right = ttk.Frame(pan, padding=12)
         pan.add(left, weight=1); pan.add(right, weight=4)
-        brand = ttk.Label(left, text="MIRALAY IFS", font=("Segoe UI", 15, "bold"), foreground="#ffffff")
-        brand.pack(fill=tk.X, ipady=12, pady=(0, 12))
-        brand.configure(background="#172b4d", anchor="center")
+        brand_panel = tk.Frame(left, bg="#172b4d", height=112, highlightthickness=0)
+        brand_panel.pack(fill=tk.X, pady=(0, 12))
+        brand_panel.pack_propagate(False)
+        if self.banner_logo is not None:
+            logo_label = tk.Label(brand_panel, image=self.banner_logo, bg="#172b4d", bd=0)
+            logo_label.pack(side=tk.TOP, pady=(8, 2))
+        tk.Label(brand_panel, text="MIRALAY IFS", font=("Segoe UI", 12, "bold"),
+                 fg="#ffffff", bg="#172b4d").pack(side=tk.TOP, pady=(0, 6))
         self.lst = tk.Listbox(left, exportselection=False); self.lst.pack(fill=tk.BOTH, expand=True)
         self.lst.bind("<<ListboxSelect>>", self.select)
         ttk.Button(left, text="+ Yeni veri kaynağı", command=self.new).pack(fill=tk.X, pady=5)
