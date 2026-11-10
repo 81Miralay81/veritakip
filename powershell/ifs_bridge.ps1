@@ -69,7 +69,7 @@ try {
   $cred.RememberPassword = $false
 
   $dialog = New-Object Ifs.Fnd.AccessProvider.Interactive.FndLoginDialog($conn)
-  $login = $dialog.ShowDialog($cred)
+  $login = $dialog.ShowDialog($cred, $true)
   if ([string]$login -ne "OK" -or !$conn.IsSessionInitialized) {
     throw "IFS oturumu baslatilamadi veya giris iptal edildi."
   }
