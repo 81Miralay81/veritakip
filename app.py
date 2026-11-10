@@ -69,10 +69,21 @@ class App:
         ttk.Button(b, text="Zamanlamayı Kur", command=self.schedule).pack(side=tk.LEFT, padx=3)
         self.status = ttk.Label(right, text="COPYOBJECT bloğunu yapıştırıp Alanları düzenle / Kaydet'e bas.")
         self.status.pack(anchor="w", pady=8)
-        self.tree = ttk.Treeview(right, columns=("date", "kind", "data"), show="headings")
-        for col, title, width in [("date", "Tarih", 150), ("kind", "Durum", 100), ("data", "Kayıt", 700)]:
-            self.tree.heading(col, text=title); self.tree.column(col, width=width)
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        resultbar = ttk.Frame(right); resultbar.pack(fill=tk.X, pady=(8, 3))
+        ttk.Label(resultbar, text="Sorgu sonuçları").pack(side=tk.LEFT)
+        ttk.Button(resultbar, text="Seçili satırları kopyala", command=self.copy_selected).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(resultbar, text="Tüm sonuçları kopyala", command=self.copy_all).pack(side=tk.RIGHT, padx=3)
+        tableframe = ttk.Frame(right); tableframe.pack(fill=tk.BOTH, expand=True)
+        self.tree = ttk.Treeview(tableframe, columns=("date", "kind"), show="headings", selectmode="extended")
+        self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=145, stretch=False)
+        self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=90, stretch=False)
+        ybar = ttk.Scrollbar(tableframe, orient="vertical", command=self.tree.yview)
+        xbar = ttk.Scrollbar(tableframe, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
+        self.tree.grid(row=0, column=0, sticky="nsew"); ybar.grid(row=0, column=1, sticky="ns")
+        xbar.grid(row=1, column=0, sticky="ew")
+        tableframe.rowconfigure(0, weight=1); tableframe.columnconfigure(0, weight=1)
+        self.result_rows = []
         self.refresh(); r.protocol("WM_DELETE_WINDOW", self.close)
 
     def refresh(self):
@@ -243,9 +254,61 @@ class App:
 
     def load_rows(self):
         self.tree.delete(*self.tree.get_children())
+        self.result_rows = []
+        records = []
         if self.sid:
-            for dt, kind, data in self.c.execute("SELECT fetched_at,change_type,row_json FROM snapshots WHERE source_id=? ORDER BY id DESC LIMIT 100", (self.sid,)):
-                self.tree.insert("", tk.END, values=(dt, kind, data[:700]))
+            for dt, kind, data in self.c.execute("SELECT fetched_at,change_type,row_json FROM snapshots WHERE source_id=? ORDER BY id DESC LIMIT 500", (self.sid,)):
+                try:
+                    row = json.loads(data)
+                except Exception:
+                    row = {"KAYIT": data}
+                records.append((dt, kind, row))
+                self.result_rows.append((dt, kind, row))
+        field_names = []
+        for _, _, row in records:
+            for key in row:
+                if key not in field_names:
+                    field_names.append(key)
+        columns = ["date", "kind"] + [f"f{i}" for i in range(len(field_names))]
+        self.tree.configure(columns=columns, displaycolumns=columns)
+        self.tree.heading("date", text="Çekilme zamanı"); self.tree.column("date", width=145, stretch=False)
+        self.tree.heading("kind", text="Değişim"); self.tree.column("kind", width=90, stretch=False)
+        for i, name in enumerate(field_names):
+            col = f"f{i}"
+            self.tree.heading(col, text=name)
+            self.tree.column(col, width=170, minwidth=90, stretch=True)
+        for dt, kind, row in records:
+            values = [dt, kind] + [row.get(name, "") for name in field_names]
+            self.tree.insert("", tk.END, values=values)
+
+    def _copy_rows(self, selected_only=False):
+        if selected_only:
+            indexes = [self.tree.index(item) for item in self.tree.selection()]
+            rows = [self.result_rows[i] for i in indexes if i < len(self.result_rows)]
+        else:
+            rows = self.result_rows
+        if not rows:
+            messagebox.showinfo("Kopyalama", "Kopyalanacak sonuç bulunamadı.")
+            return
+        keys = []
+        for _, _, row in rows:
+            for key in row:
+                if key not in keys:
+                    keys.append(key)
+        lines = ["Çekilme zamanı\tDeğişim\t" + "\t".join(keys)]
+        for dt, kind, row in rows:
+            vals = [str(row.get(k, "") if row.get(k) is not None else "") for k in keys]
+            lines.append("\t".join([dt, kind] + vals))
+        self.r.clipboard_clear()
+        self.r.clipboard_append("\n".join(lines))
+        self.r.update()
+        self.status.config(text=f"{len(rows)} satır panoya kopyalandı.")
+
+    def copy_selected(self):
+        self._copy_rows(True)
+
+    def copy_all(self):
+        self._copy_rows(False)
 
     def schedule(self):
         if not self.sid: messagebox.showwarning("Kaynak", "Önce kaynak seç."); return
