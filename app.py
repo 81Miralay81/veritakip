@@ -217,6 +217,20 @@ class App:
         self.c.commit()
         return f"{len(rows)} kayıt alındı. Yeni: {new}, değişen: {changed}"
 
+    def show_error(self, title, message):
+        # Ayrintili hata metnini secilebilir ve tek tikla kopyalanabilir goster.
+        win = tk.Toplevel(self.r); win.title(title); win.geometry("850x420"); win.transient(self.r)
+        ttk.Label(win, text="Hata ayrintisi (metni secip kopyalayabilir veya tumunu kopyalayabilirsin):").pack(anchor="w", padx=10, pady=(10, 4))
+        frame = ttk.Frame(win); frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        box = tk.Text(frame, wrap=tk.WORD, height=16); scroll = ttk.Scrollbar(frame, command=box.yview)
+        box.configure(yscrollcommand=scroll.set); box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        box.insert("1.0", str(message)); box.configure(state=tk.DISABLED)
+        buttons = ttk.Frame(win); buttons.pack(fill=tk.X, padx=10, pady=10)
+        def copy_all():
+            self.r.clipboard_clear(); self.r.clipboard_append(str(message)); self.r.update()
+        ttk.Button(buttons, text="Tüm hatayı kopyala", command=copy_all).pack(side=tk.LEFT)
+        ttk.Button(buttons, text="Kapat", command=win.destroy).pack(side=tk.RIGHT)
+
     def fetch(self):
         if not self.sid: messagebox.showwarning("Kaynak", "Önce kaynağı kaydet."); return
         try:
@@ -224,7 +238,8 @@ class App:
             msg = self.execute_sync(self.sid); self.status.config(text=msg); self.load_rows()
             messagebox.showinfo("Tamamlandı", msg)
         except Exception as e:
-            self.status.config(text="Hata: " + str(e)); messagebox.showerror("IFS hatası", str(e))
+            self.status.config(text="IFS bağlantı hatası - ayrıntı penceresini kontrol et.")
+            self.show_error("IFS bağlantı hatası", str(e))
 
     def load_rows(self):
         self.tree.delete(*self.tree.get_children())
