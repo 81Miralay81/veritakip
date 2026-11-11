@@ -100,8 +100,8 @@ try {
       $bindName = "P_VAL_$index"
       if ($value.Contains("%")) {
         # Only percent is a wildcard. Treat underscore as a literal character.
-        $likeValue = $value.Replace("\\", "\\\\").Replace("_", "\\_")
-        $where += ('UPPER("' + $field + '") LIKE UPPER(:' + $bindName + ') ESCAPE ''\\''')
+        $likeValue = $value.Replace('\', '\\').Replace('_', '\_')
+        $where += ('UPPER("' + $field + '") LIKE UPPER(:' + $bindName + ') ESCAPE ''\''')
         $attr = New-Object Ifs.Fnd.Data.FndAlphaAttribute($likeValue)
       }
       else {
