@@ -98,13 +98,16 @@ try {
     }
     else {
       $bindName = "P_VAL_$index"
-      if ($value.Contains("%") -or $value.Contains("_")) {
-        $where += ('UPPER("' + $field + '") LIKE UPPER(:' + $bindName + ')')
+      if ($value.Contains("%")) {
+        # Only percent is a wildcard. Treat underscore as a literal character.
+        $likeValue = $value.Replace("\\", "\\\\").Replace("_", "\\_")
+        $where += ('UPPER("' + $field + '") LIKE UPPER(:' + $bindName + ') ESCAPE ''\\''')
+        $attr = New-Object Ifs.Fnd.Data.FndAlphaAttribute($likeValue)
       }
       else {
         $where += ('"' + $field + '" = :' + $bindName)
+        $attr = New-Object Ifs.Fnd.Data.FndAlphaAttribute($value)
       }
-      $attr = New-Object Ifs.Fnd.Data.FndAlphaAttribute($value)
       $binds.Add((New-Object Ifs.Fnd.AccessProvider.PLSQL.FndBindVariable($bindName, $attr)))
     }
     $index++
