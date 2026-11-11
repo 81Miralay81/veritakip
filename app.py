@@ -38,6 +38,7 @@ def parse_copy(raw):
     if not view:
         raise ValueError("İlk satırlarda $VIEW bulunamadı.")
     found = []
+    seen_expressions = set()
     for line in raw.splitlines():
         m = re.match(r'^\s*-\$\d+\s*:\s*(.*?)\s*=\s*(.*?)\s*$', line)
         if not m:
@@ -45,6 +46,12 @@ def parse_copy(raw):
         if not m:
             continue
         expression, value = m.group(1).strip(), m.group(2).strip()
+        # COPYOBJECT may repeat the same API/function expression. Keep one
+        # display entry per expression so duplicate keys cannot break editing.
+        expression_key = expression.casefold()
+        if expression_key in seen_expressions:
+            continue
+        seen_expressions.add(expression_key)
         # Only plain database column names can be used in SQL filters.
         queryable = bool(re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', expression))
         name = expression.upper() if queryable else expression
@@ -177,7 +184,6 @@ class App:
         self.displayed_indexes = []
         r.after(150, lambda: pan.sashpos(0, 250))
         self.refresh(); r.protocol("WM_DELETE_WINDOW", self.close)
-
     def refresh(self):
         self.lst.delete(0, tk.END)
         for name, in self.c.execute("SELECT name FROM sources ORDER BY id"):
@@ -229,10 +235,10 @@ class App:
 
     def open_field_editor(self, raw, lu, view, fields):
         win = tk.Toplevel(self.r); win.title("IFS alanları ve sorgu koşulları")
-        win.geometry("980x680"); win.transient(self.r); win.grab_set()
+        win.geometry("1240x760"); win.minsize(1100, 650); win.transient(self.r); win.grab_set()
         top = ttk.Frame(win, padding=10); top.pack(fill=tk.X)
         ttk.Label(top, text=f"LU: {lu or '-'}     VIEW: {view}", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        ttk.Label(top, text="Sadece seçtiğin gerçek alanlar filtre olur. % = bu alan için filtre uygulama. Tarih aralığı: 01.01.2026..31.01.2026").pack(anchor="w", pady=4)
+        ttk.Label(top, text="Filtre kutusuna koşulunu yaz: DK% = DK ile başlayan, DK%-1 = DK ile başlayıp -1 ile biten. Yalnızca % joker karakterdir; tek başına % filtre uygulamaz. Tarih aralığı: 01.01.2026..31.01.2026").pack(anchor="w", pady=4)
         outer = ttk.Frame(win); outer.pack(fill=tk.BOTH, expand=True, padx=10)
         canvas = tk.Canvas(outer, highlightthickness=0); sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         inner = ttk.Frame(canvas); inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -249,10 +255,17 @@ class App:
             label = field["expression"]
             ttk.Label(inner, text=label, width=43).grid(row=i, column=1, sticky="w", padx=5, pady=2)
             ttk.Label(inner, text=field.get("value", "")[:38], width=28, foreground=("#555555" if field["queryable"] else "#999999")).grid(row=i, column=2, sticky="w", padx=5)
-            ent = ttk.Entry(inner, textvariable=value, width=35, state=("normal" if field["queryable"] else "disabled"))
-            ent.grid(row=i, column=3, sticky="ew", padx=5, pady=2)
+            ent = tk.Entry(inner, textvariable=value, width=52,
+                           state=("normal" if field["queryable"] else "disabled"),
+                           bg=COLORS["input"], fg=COLORS["text"],
+                           insertbackground=COLORS["text"], disabledbackground="#242944",
+                           disabledforeground=COLORS["muted"], relief="solid", bd=1,
+                           highlightthickness=1, highlightbackground=COLORS["blue"],
+                           highlightcolor=COLORS["cyan"], font=("Consolas", 10))
+            ent.grid(row=i, column=3, sticky="ew", padx=7, pady=4, ipady=5)
             states.append((field, enabled, value))
-        inner.columnconfigure(3, weight=1)
+        inner.columnconfigure(1, weight=2)
+        inner.columnconfigure(3, weight=3)
         bottom = ttk.Frame(win, padding=10); bottom.pack(fill=tk.X)
         ttk.Label(bottom, text="Fonksiyonlu satırlar bilgi amaçlıdır; doğrudan SQL filtresi yapılamaz.").pack(side=tk.LEFT)
         def commit():
@@ -357,8 +370,7 @@ class App:
         try:
             proceed = messagebox.askyesno("Sorgu öncesi kontrol",
                 f"Bu sorgu en fazla {MAX_ROWS:,} satır getirecek.\n\n"
-                "Güvenlik için 500 satırdan fazlası otomatik olarak alınmaz.\n\nDevam edilsin mi?")
-            if not proceed:
+                "Güvenlik için 500 satırdan fazlası otomatik olarak alınmaz.\n\nDevam edilsin mi?")            if not proceed:
                 self.status.config(text="Sorgu kullanıcı tarafından iptal edildi.")
                 return
             self.status.config(text="IFS sorgusu çalıştırılıyor..."); self.r.update_idletasks()
